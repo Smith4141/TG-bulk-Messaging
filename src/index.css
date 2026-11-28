@@ -1,0 +1,44 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: 'Plus Jakarta Sans', 'DM Sans', system-ui, sans-serif;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes telegram-typing-dot {
+  0%, 60%, 100% {
+    transform: translateY(0) scale(0.85);
+    opacity: 0.45;
+  }
+  30% {
+    transform: translateY(-4px) scale(1.05);
+    opacity: 1;
+  }
+}
+
+.telegram-typing-dot {
+  animation: telegram-typing-dot 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .telegram-typing-dot {
+    animation: none;
+    opacity: 0.85;
+  }
+}
+

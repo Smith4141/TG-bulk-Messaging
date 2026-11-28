@@ -1,0 +1,859 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Pillar 4.1: Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================
+    // Global Hardened Primitives
+    // =========================================================
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwner(userId) {
+      return isEmailVerified() && request.auth.uid == userId;
+    }
+
+    function isBootstrappedAdmin() {
+      return isEmailVerified() && request.auth.token.email == 'hidden25soul@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() ||
+        (isEmailVerified() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function hasParentUser(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)) &&
+        get(/databases/$(database)/documents/users/$(userId)).data.uid == userId;
+    }
+
+    function isValidStringList(arr, maxLen) {
+      return arr is list &&
+        arr.size() <= maxLen &&
+        (arr.size() == 0 || (arr[0] is string && arr[0].size() <= 128));
+    }
+
+    function isStr(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isOptStr(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function isOptBool(data, key) {
+      return !(key in data) || (data[key] is bool);
+    }
+
+    // =========================================================
+    // Entity Validation Blueprints (Pillar 2)
+    // =========================================================
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'displayName', 'role', 'createdAt', 'updatedAt']) &&
+        data.uid == userId &&
+        isValidId(data.uid) &&
+        isStr(data.displayName, 1, 120) &&
+        data.role in ['admin', 'moderator', 'editor', 'viewer'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivateInfo(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'createdAt', 'updatedAt']) &&
+        data.uid == userId &&
+        isValidId(data.uid) &&
+        isStr(data.email, 3, 254) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidContact(data, userId, contactId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'name', 'phoneNumber', 'hasTelegram', 'telegramStatus',
+          'stage', 'tags', 'optInStatus', 'optInDate', 'optInSource',
+          'googleContactSynced', 'assignedToAgentId', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerId', 'name', 'phoneNumber', 'telegramUsername', 'telegramUid',
+          'hasTelegram', 'telegramStatus', 'lastSeen', 'company', 'email', 'stage',
+          'tags', 'group', 'optInStatus', 'optInMethod', 'optInDate', 'optInSource',
+          'optOutTimestamp', 'optOutReason', 'googleContactSynced', 'assignedToAgentId',
+          'assignedModeratorId', 'initialSessionId', 'customFields', 'notes',
+          'isArchived', 'archivedAt', 'createdAt', 'updatedAt'
+        ]) &&
+        data.id == contactId &&
+        data.ownerId == userId &&
+        isValidId(data.id) &&
+        isValidId(data.ownerId) &&
+        isStr(data.name, 1, 160) &&
+        isStr(data.phoneNumber, 1, 40) &&
+        data.hasTelegram is bool &&
+        data.telegramStatus in ['active', 'inactive', 'unknown'] &&
+        data.stage in ['lead', 'qualified', 'contacted', 'opportunity', 'customer', 'churned'] &&
+        isValidStringList(data.tags, 25) &&
+        data.optInStatus in ['explicit_opt_in', 'implicit_opt_in', 'opted_out', 'dnc_suppressed'] &&
+        isStr(data.optInDate, 1, 40) &&
+        isStr(data.optInSource, 1, 160) &&
+        data.googleContactSynced is bool &&
+        isStr(data.assignedToAgentId, 1, 128) &&
+        isOptStr(data, 'telegramUsername', 80) &&
+        isOptStr(data, 'telegramUid', 80) &&
+        isOptStr(data, 'lastSeen', 100) &&
+        isOptStr(data, 'company', 160) &&
+        isOptStr(data, 'email', 254) &&
+        isOptStr(data, 'group', 100) &&
+        isOptStr(data, 'optInMethod', 64) &&
+        isOptStr(data, 'optOutTimestamp', 64) &&
+        isOptStr(data, 'optOutReason', 256) &&
+        isOptStr(data, 'assignedModeratorId', 128) &&
+        isOptStr(data, 'initialSessionId', 128) &&
+        isOptStr(data, 'notes', 2000) &&
+        isOptStr(data, 'archivedAt', 64) &&
+        isOptBool(data, 'isArchived') &&
+        (!('customFields' in data) || (data.customFields is map && data.customFields.size() <= 30)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCampaign(data, userId, campaignId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'name', 'messageText', 'targetSegment',
+          'recipientCount', 'sentCount', 'deliveredCount', 'readCount',
+          'clickedCount', 'failedCount', 'unsubscribedCount', 'status',
+          'sendRatePerSecond', 'tags', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerId', 'name', 'messageText', 'mediaUrl', 'mediaType',
+          'targetSegment', 'recipientCount', 'sentCount', 'deliveredCount',
+          'readCount', 'clickedCount', 'failedCount', 'repliedCount',
+          'unsubscribedCount', 'status', 'scheduledTime', 'sendRatePerSecond',
+          'buttonText', 'buttonUrl', 'tags', 'sendingEngine',
+          'antiBanDelaySeconds', 'minDelaySeconds', 'maxDelaySeconds',
+          'assignedSessionIds', 'autoAppendOptOutFooter', 'spambotPreFlightCheck',
+          'pausedReason', 'flaggedSessionId', 'failureBreakdown',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.id == campaignId &&
+        data.ownerId == userId &&
+        isValidId(data.id) &&
+        isValidId(data.ownerId) &&
+        isStr(data.name, 1, 200) &&
+        isStr(data.messageText, 0, 4096) &&
+        isStr(data.targetSegment, 1, 128) &&
+        data.recipientCount is int && data.recipientCount >= 0 &&
+        data.sentCount is int && data.sentCount >= 0 &&
+        data.deliveredCount is int && data.deliveredCount >= 0 &&
+        data.readCount is int && data.readCount >= 0 &&
+        data.clickedCount is int && data.clickedCount >= 0 &&
+        data.failedCount is int && data.failedCount >= 0 &&
+        data.unsubscribedCount is int && data.unsubscribedCount >= 0 &&
+        data.status in ['draft', 'scheduled', 'running', 'completed', 'paused', 'failed'] &&
+        data.sendRatePerSecond is number && data.sendRatePerSecond >= 0 &&
+        isValidStringList(data.tags, 20) &&
+        isOptStr(data, 'mediaUrl', 1000) &&
+        isOptStr(data, 'mediaType', 32) &&
+        isOptStr(data, 'scheduledTime', 64) &&
+        isOptStr(data, 'buttonText', 100) &&
+        isOptStr(data, 'buttonUrl', 1000) &&
+        isOptStr(data, 'sendingEngine', 32) &&
+        isOptStr(data, 'pausedReason', 500) &&
+        isOptStr(data, 'flaggedSessionId', 128) &&
+        isOptBool(data, 'autoAppendOptOutFooter') &&
+        isOptBool(data, 'spambotPreFlightCheck') &&
+        (!('repliedCount' in data) || (data.repliedCount is int && data.repliedCount >= 0)) &&
+        (!('antiBanDelaySeconds' in data) || data.antiBanDelaySeconds is number) &&
+        (!('minDelaySeconds' in data) || data.minDelaySeconds is number) &&
+        (!('maxDelaySeconds' in data) || data.maxDelaySeconds is number) &&
+        (!('assignedSessionIds' in data) || isValidStringList(data.assignedSessionIds, 50)) &&
+        (!('failureBreakdown' in data) || (data.failureBreakdown is map && data.failureBreakdown.size() <= 20)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidChatMessage(data, userId, messageId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'contactId', 'sender', 'senderName',
+          'text', 'timestamp', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerId', 'contactId', 'sender', 'senderName',
+          'text', 'timestamp', 'status', 'sessionId', 'sessionLabel',
+          'mediaUrl', 'originalText', 'translatedText', 'translatedLang',
+          'replyTo', 'reactions', 'attachment', 'isPinned',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.id == messageId &&
+        data.ownerId == userId &&
+        isValidId(data.id) &&
+        isValidId(data.ownerId) &&
+        isValidId(data.contactId) &&
+        data.sender in ['contact', 'agent', 'bot'] &&
+        isStr(data.senderName, 1, 160) &&
+        isStr(data.text, 0, 4096) &&
+        isStr(data.timestamp, 1, 40) &&
+        data.status in ['sent', 'delivered', 'read'] &&
+        isOptStr(data, 'sessionId', 128) &&
+        isOptStr(data, 'sessionLabel', 160) &&
+        isOptStr(data, 'mediaUrl', 1000) &&
+        isOptStr(data, 'originalText', 4096) &&
+        isOptStr(data, 'translatedText', 4096) &&
+        isOptStr(data, 'translatedLang', 24) &&
+        isOptBool(data, 'isPinned') &&
+        (!('replyTo' in data) || (data.replyTo is map && data.replyTo.size() <= 5)) &&
+        (!('reactions' in data) || (data.reactions is map && data.reactions.size() <= 20)) &&
+        (!('attachment' in data) || (data.attachment is map && data.attachment.size() <= 8)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAutoResponse(data, userId, ruleId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'triggerKeyword', 'matchType', 'replyText',
+          'isActive', 'priority', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerId', 'triggerKeyword', 'matchType', 'replyText',
+          'isActive', 'priority', 'action', 'createdAt', 'updatedAt'
+        ]) &&
+        data.id == ruleId &&
+        data.ownerId == userId &&
+        isValidId(data.id) &&
+        isValidId(data.ownerId) &&
+        isStr(data.triggerKeyword, 1, 120) &&
+        data.matchType in ['exact', 'contains', 'starts_with'] &&
+        isStr(data.replyText, 1, 2000) &&
+        data.isActive is bool &&
+        data.priority is int && data.priority >= 0 && data.priority <= 1000 &&
+        isOptStr(data, 'action', 40) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidWebhook(data, userId, webhookId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'name', 'endpointUrl', 'secretToken',
+          'eventSubscriptions', 'isActive', 'totalCalls', 'successRate',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerId', 'name', 'endpointUrl', 'secretToken',
+          'eventSubscriptions', 'isActive', 'totalCalls', 'successRate',
+          'lastTriggered', 'createdAt', 'updatedAt'
+        ]) &&
+        data.id == webhookId &&
+        data.ownerId == userId &&
+        isValidId(data.id) &&
+        isValidId(data.ownerId) &&
+        isStr(data.name, 1, 160) &&
+        isStr(data.endpointUrl, 1, 500) &&
+        isStr(data.secretToken, 0, 256) &&
+        isValidStringList(data.eventSubscriptions, 30) &&
+        data.isActive is bool &&
+        data.totalCalls is int && data.totalCalls >= 0 &&
+        data.successRate is number && data.successRate >= 0 && data.successRate <= 100 &&
+        isOptStr(data, 'lastTriggered', 64) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidWebhookLog(data, userId, logId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'webhookId', 'event', 'payload',
+          'responseStatus', 'responseBody', 'timestamp', 'executionTimeMs', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerId', 'webhookId', 'event', 'payload',
+          'responseStatus', 'responseBody', 'timestamp', 'executionTimeMs', 'createdAt'
+        ]) &&
+        data.id == logId &&
+        data.ownerId == userId &&
+        isValidId(data.id) &&
+        isValidId(data.ownerId) &&
+        isValidId(data.webhookId) &&
+        isStr(data.event, 1, 120) &&
+        isStr(data.payload, 0, 8000) &&
+        data.responseStatus is int &&
+        isStr(data.responseBody, 0, 2000) &&
+        isStr(data.timestamp, 1, 40) &&
+        data.executionTimeMs is int && data.executionTimeMs >= 0 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidUserbotSession(data, userId, sessionId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'label', 'phone', 'healthStatus', 'spambotStatus',
+          'dailyLimit', 'messagesSentToday', 'messagesSentTotal', 'isConnected',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerId', 'label', 'phone', 'apiId', 'apiHash', 'sessionString',
+          'proxy', 'healthStatus', 'spambotStatus', 'spambotMessage',
+          'lastSpambotCheckAt', 'floodWaitSeconds', 'floodWaitUntil',
+          'dailyLimit', 'messagesSentToday', 'messagesSentTotal',
+          'messagesSentBeforeFlag', 'isConnected', 'isLiveTelegramClient',
+          'account', 'createdAt', 'updatedAt'
+        ]) &&
+        data.id == sessionId &&
+        data.ownerId == userId &&
+        isValidId(data.id) &&
+        isValidId(data.ownerId) &&
+        isStr(data.label, 1, 160) &&
+        isStr(data.phone, 1, 40) &&
+        data.healthStatus in ['active', 'flood_wait', 'flagged_spambot', 'user_deactivated', 'auth_key_unregistered', 'disconnected'] &&
+        data.spambotStatus in ['clean', 'limited', 'banned', 'unchecked'] &&
+        data.dailyLimit is int && data.dailyLimit >= 0 &&
+        data.messagesSentToday is int && data.messagesSentToday >= 0 &&
+        data.messagesSentTotal is int && data.messagesSentTotal >= 0 &&
+        data.isConnected is bool &&
+        isOptStr(data, 'apiId', 64) &&
+        isOptStr(data, 'apiHash', 128) &&
+        isOptStr(data, 'sessionString', 4096) &&
+        isOptStr(data, 'spambotMessage', 500) &&
+        isOptStr(data, 'lastSpambotCheckAt', 64) &&
+        isOptStr(data, 'floodWaitUntil', 64) &&
+        isOptBool(data, 'isLiveTelegramClient') &&
+        (!('floodWaitSeconds' in data) || data.floodWaitSeconds is int) &&
+        (!('messagesSentBeforeFlag' in data) || data.messagesSentBeforeFlag is int) &&
+        (!('proxy' in data) || (data.proxy is map && data.proxy.size() <= 10)) &&
+        (!('account' in data) || (data.account is map && data.account.size() <= 12)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAudienceList(data, userId, listId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'name', 'contactIds', 'source', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerId', 'name', 'description', 'contactIds', 'source',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.id == listId &&
+        data.ownerId == userId &&
+        isValidId(data.id) &&
+        isValidId(data.ownerId) &&
+        isStr(data.name, 1, 160) &&
+        isOptStr(data, 'description', 500) &&
+        isValidStringList(data.contactIds, 500) &&
+        isStr(data.source, 1, 120) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCampaignBackup(data, userId, backupId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'campaignId', 'campaignName', 'tag',
+          'triggeredBySessionId', 'triggeredBySessionLabel', 'triggeredReason',
+          'pendingCount', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerId', 'campaignId', 'campaignName', 'tag',
+          'triggeredBySessionId', 'triggeredBySessionLabel', 'triggeredReason',
+          'pendingCount', 'pendingRecipients', 'restoredAt', 'restoredWithSessionId',
+          'createdAt', 'updatedAt'
+        ]) &&
+        data.id == backupId &&
+        data.ownerId == userId &&
+        isValidId(data.id) &&
+        isValidId(data.ownerId) &&
+        isValidId(data.campaignId) &&
+        isStr(data.campaignName, 1, 200) &&
+        isStr(data.tag, 1, 250) &&
+        isStr(data.triggeredBySessionId, 1, 128) &&
+        isStr(data.triggeredBySessionLabel, 1, 160) &&
+        isStr(data.triggeredReason, 1, 500) &&
+        data.pendingCount is int && data.pendingCount >= 0 &&
+        isOptStr(data, 'restoredAt', 64) &&
+        isOptStr(data, 'restoredWithSessionId', 128) &&
+        (!('pendingRecipients' in data) || (data.pendingRecipients is list && data.pendingRecipients.size() <= 500 && (data.pendingRecipients.size() == 0 || data.pendingRecipients[0] is map))) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCloudFile(data, userId, fileId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'name', 'size', 'type', 'uploadedAt',
+          'url', 'encrypted', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerId', 'name', 'size', 'type', 'uploadedAt',
+          'url', 'encrypted', 'createdAt'
+        ]) &&
+        data.id == fileId &&
+        data.ownerId == userId &&
+        isValidId(data.id) &&
+        isValidId(data.ownerId) &&
+        isStr(data.name, 1, 255) &&
+        data.size is int && data.size >= 0 &&
+        isStr(data.type, 1, 120) &&
+        isStr(data.uploadedAt, 1, 40) &&
+        isStr(data.url, 0, 1000) &&
+        data.encrypted is bool &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidAuditLog(data, userId, logId) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'userId', 'userName', 'action',
+          'entity', 'details', 'timestamp', 'ipAddress', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerId', 'userId', 'userName', 'action',
+          'entity', 'details', 'timestamp', 'ipAddress', 'createdAt'
+        ]) &&
+        data.id == logId &&
+        data.ownerId == userId &&
+        isValidId(data.id) &&
+        isValidId(data.ownerId) &&
+        isStr(data.userId, 1, 128) &&
+        isStr(data.userName, 1, 160) &&
+        isStr(data.action, 1, 120) &&
+        isStr(data.entity, 1, 120) &&
+        isStr(data.details, 1, 1000) &&
+        isStr(data.timestamp, 1, 40) &&
+        isStr(data.ipAddress, 1, 64) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidWorkspaceSetting(data, userId, settingKey) {
+      return data.keys().hasAll(['key', 'ownerId', 'payload', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['key', 'ownerId', 'payload', 'createdAt', 'updatedAt']) &&
+        data.key == settingKey &&
+        data.key in ['wordpress', 'googleSync', 'botConfig', 'mtprotoConfig', 'moderatorRouting'] &&
+        data.ownerId == userId &&
+        isValidId(data.ownerId) &&
+        data.payload is map && data.payload.size() <= 30 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // =========================================================
+    // Connection Health & Admin Marker Collections
+    // =========================================================
+    match /test/connection {
+      allow get: if isSignedIn();
+      allow list, write: if false;
+    }
+
+    match /admins/{adminId} {
+      allow get: if isSignedIn() && request.auth.uid == adminId;
+      allow list, write: if false;
+    }
+
+    // =========================================================
+    // User Profiles & Isolated PII Subcollection (Pillar 6)
+    // =========================================================
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create: if isValidId(userId) &&
+        isOwner(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (incoming().role in ['viewer', 'editor'] || (incoming().role == 'admin' && isBootstrappedAdmin()));
+      allow update: if isValidId(userId) &&
+        isValidUserProfile(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          isAdmin() ||
+          (
+            isOwner(userId) &&
+            incoming().role == existing().role &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(userId) && isAdmin();
+
+      match /private/{docId} {
+        allow get: if isValidId(userId) && docId == 'info' && (isOwner(userId) || isAdmin());
+        allow list: if false;
+        allow create: if isValidId(userId) &&
+          docId == 'info' &&
+          isOwner(userId) &&
+          hasParentUser(userId) &&
+          isValidUserPrivateInfo(incoming(), userId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) &&
+          docId == 'info' &&
+          isValidUserPrivateInfo(incoming(), userId) &&
+          incoming().uid == existing().uid &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt'])
+            )
+          );
+        allow delete: if isValidId(userId) && isAdmin();
+      }
+
+      // =========================================================
+      // Contacts
+      // =========================================================
+      match /contacts/{contactId} {
+        allow get: if isValidId(userId) && isValidId(contactId) && (isOwner(userId) || isAdmin());
+        allow list: if isEmailVerified() && (resource.data.ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isValidId(userId) && isValidId(contactId) &&
+          isOwner(userId) &&
+          hasParentUser(userId) &&
+          isValidContact(incoming(), userId, contactId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(contactId) &&
+          hasParentUser(userId) &&
+          isValidContact(incoming(), userId, contactId) &&
+          incoming().id == existing().id &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'name', 'phoneNumber', 'telegramUsername', 'telegramUid', 'hasTelegram',
+                'telegramStatus', 'lastSeen', 'company', 'email', 'stage', 'tags',
+                'group', 'optInStatus', 'optInMethod', 'optInDate', 'optInSource',
+                'optOutTimestamp', 'optOutReason', 'googleContactSynced',
+                'assignedToAgentId', 'assignedModeratorId', 'initialSessionId',
+                'customFields', 'notes', 'isArchived', 'archivedAt', 'updatedAt'
+              ])
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(contactId) && (isOwner(userId) || isAdmin());
+      }
+
+      // =========================================================
+      // Campaigns (with Terminal State Locking)
+      // =========================================================
+      match /campaigns/{campaignId} {
+        allow get: if isValidId(userId) && isValidId(campaignId) && (isOwner(userId) || isAdmin());
+        allow list: if isEmailVerified() && (resource.data.ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isValidId(userId) && isValidId(campaignId) &&
+          isOwner(userId) &&
+          hasParentUser(userId) &&
+          isValidCampaign(incoming(), userId, campaignId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(campaignId) &&
+          hasParentUser(userId) &&
+          isValidCampaign(incoming(), userId, campaignId) &&
+          incoming().id == existing().id &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              existing().status != 'completed' &&
+              (
+                incoming().diff(existing()).affectedKeys().hasOnly([
+                  'status', 'pausedReason', 'flaggedSessionId', 'updatedAt'
+                ]) ||
+                incoming().diff(existing()).affectedKeys().hasOnly([
+                  'sentCount', 'deliveredCount', 'readCount', 'clickedCount',
+                  'failedCount', 'repliedCount', 'unsubscribedCount',
+                  'failureBreakdown', 'status', 'assignedSessionIds', 'updatedAt'
+                ])
+              )
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(campaignId) && (isOwner(userId) || isAdmin());
+      }
+
+      // =========================================================
+      // Chat Messages (Relational Integrity to Contact)
+      // =========================================================
+      match /chatMessages/{messageId} {
+        allow get: if isValidId(userId) && isValidId(messageId) && (isOwner(userId) || isAdmin());
+        allow list: if isEmailVerified() && (resource.data.ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isValidId(userId) && isValidId(messageId) &&
+          isOwner(userId) &&
+          hasParentUser(userId) &&
+          isValidChatMessage(incoming(), userId, messageId) &&
+          exists(/databases/$(database)/documents/users/$(userId)/contacts/$(incoming().contactId)) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(messageId) &&
+          hasParentUser(userId) &&
+          isValidChatMessage(incoming(), userId, messageId) &&
+          incoming().id == existing().id &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().contactId == existing().contactId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'status', 'reactions', 'isPinned', 'translatedText', 'translatedLang', 'updatedAt'
+              ])
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(messageId) && (isOwner(userId) || isAdmin());
+      }
+
+      // =========================================================
+      // Auto-Response Rules
+      // =========================================================
+      match /autoResponses/{ruleId} {
+        allow get: if isValidId(userId) && isValidId(ruleId) && (isOwner(userId) || isAdmin());
+        allow list: if isEmailVerified() && (resource.data.ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isValidId(userId) && isValidId(ruleId) &&
+          isOwner(userId) &&
+          hasParentUser(userId) &&
+          isValidAutoResponse(incoming(), userId, ruleId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(ruleId) &&
+          hasParentUser(userId) &&
+          isValidAutoResponse(incoming(), userId, ruleId) &&
+          incoming().id == existing().id &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'triggerKeyword', 'matchType', 'replyText', 'isActive', 'priority', 'action', 'updatedAt'
+              ])
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(ruleId) && (isOwner(userId) || isAdmin());
+      }
+
+      // =========================================================
+      // Webhooks & Immutable Webhook Logs
+      // =========================================================
+      match /webhooks/{webhookId} {
+        allow get: if isValidId(userId) && isValidId(webhookId) && (isOwner(userId) || isAdmin());
+        allow list: if isEmailVerified() && (resource.data.ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isValidId(userId) && isValidId(webhookId) &&
+          isOwner(userId) &&
+          hasParentUser(userId) &&
+          isValidWebhook(incoming(), userId, webhookId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(webhookId) &&
+          hasParentUser(userId) &&
+          isValidWebhook(incoming(), userId, webhookId) &&
+          incoming().id == existing().id &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'name', 'endpointUrl', 'secretToken', 'eventSubscriptions',
+                'isActive', 'totalCalls', 'successRate', 'lastTriggered', 'updatedAt'
+              ])
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(webhookId) && (isOwner(userId) || isAdmin());
+      }
+
+      match /webhookLogs/{logId} {
+        allow get: if isValidId(userId) && isValidId(logId) && (isOwner(userId) || isAdmin());
+        allow list: if isEmailVerified() && (resource.data.ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isValidId(userId) && isValidId(logId) &&
+          isOwner(userId) &&
+          hasParentUser(userId) &&
+          isValidWebhookLog(incoming(), userId, logId) &&
+          incoming().createdAt == request.time;
+        allow update, delete: if isValidId(userId) && isValidId(logId) && isAdmin();
+      }
+
+      // =========================================================
+      // Userbot Sessions
+      // =========================================================
+      match /userbotSessions/{sessionId} {
+        allow get: if isValidId(userId) && isValidId(sessionId) && (isOwner(userId) || isAdmin());
+        allow list: if isEmailVerified() && (resource.data.ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isValidId(userId) && isValidId(sessionId) &&
+          isOwner(userId) &&
+          hasParentUser(userId) &&
+          isValidUserbotSession(incoming(), userId, sessionId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(sessionId) &&
+          hasParentUser(userId) &&
+          isValidUserbotSession(incoming(), userId, sessionId) &&
+          incoming().id == existing().id &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'label', 'proxy', 'healthStatus', 'spambotStatus', 'spambotMessage',
+                'lastSpambotCheckAt', 'floodWaitSeconds', 'floodWaitUntil',
+                'dailyLimit', 'messagesSentToday', 'messagesSentTotal',
+                'messagesSentBeforeFlag', 'isConnected', 'isLiveTelegramClient',
+                'account', 'updatedAt'
+              ])
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(sessionId) && (isOwner(userId) || isAdmin());
+      }
+
+      // =========================================================
+      // Audience Lists
+      // =========================================================
+      match /audienceLists/{listId} {
+        allow get: if isValidId(userId) && isValidId(listId) && (isOwner(userId) || isAdmin());
+        allow list: if isEmailVerified() && (resource.data.ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isValidId(userId) && isValidId(listId) &&
+          isOwner(userId) &&
+          hasParentUser(userId) &&
+          isValidAudienceList(incoming(), userId, listId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(listId) &&
+          hasParentUser(userId) &&
+          isValidAudienceList(incoming(), userId, listId) &&
+          incoming().id == existing().id &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'name', 'description', 'contactIds', 'source', 'updatedAt'
+              ])
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(listId) && (isOwner(userId) || isAdmin());
+      }
+
+      // =========================================================
+      // Campaign Backup Snapshots
+      // =========================================================
+      match /campaignBackups/{backupId} {
+        allow get: if isValidId(userId) && isValidId(backupId) && (isOwner(userId) || isAdmin());
+        allow list: if isEmailVerified() && (resource.data.ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isValidId(userId) && isValidId(backupId) &&
+          isOwner(userId) &&
+          hasParentUser(userId) &&
+          isValidCampaignBackup(incoming(), userId, backupId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(backupId) &&
+          hasParentUser(userId) &&
+          isValidCampaignBackup(incoming(), userId, backupId) &&
+          incoming().id == existing().id &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().campaignId == existing().campaignId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              !('restoredAt' in existing()) &&
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'restoredAt', 'restoredWithSessionId', 'updatedAt'
+              ])
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(backupId) && (isOwner(userId) || isAdmin());
+      }
+
+      // =========================================================
+      // Cloud Files
+      // =========================================================
+      match /cloudFiles/{fileId} {
+        allow get: if isValidId(userId) && isValidId(fileId) && (isOwner(userId) || isAdmin());
+        allow list: if isEmailVerified() && (resource.data.ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isValidId(userId) && isValidId(fileId) &&
+          isOwner(userId) &&
+          hasParentUser(userId) &&
+          isValidCloudFile(incoming(), userId, fileId) &&
+          incoming().createdAt == request.time;
+        allow update: if false;
+        allow delete: if isValidId(userId) && isValidId(fileId) && (isOwner(userId) || isAdmin());
+      }
+
+      // =========================================================
+      // Append-Only Audit Logs
+      // =========================================================
+      match /auditLogs/{logId} {
+        allow get: if isValidId(userId) && isValidId(logId) && (isOwner(userId) || isAdmin());
+        allow list: if isEmailVerified() && (resource.data.ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isValidId(userId) && isValidId(logId) &&
+          isOwner(userId) &&
+          hasParentUser(userId) &&
+          isValidAuditLog(incoming(), userId, logId) &&
+          incoming().createdAt == request.time;
+        allow update, delete: if isValidId(userId) && isValidId(logId) && isAdmin();
+      }
+
+      // =========================================================
+      // Workspace Settings
+      // =========================================================
+      match /settings/{settingKey} {
+        allow get: if isValidId(userId) && isValidId(settingKey) && (isOwner(userId) || isAdmin());
+        allow list: if isEmailVerified() && (resource.data.ownerId == request.auth.uid || isBootstrappedAdmin());
+        allow create: if isValidId(userId) && isValidId(settingKey) &&
+          isOwner(userId) &&
+          hasParentUser(userId) &&
+          isValidWorkspaceSetting(incoming(), userId, settingKey) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time;
+        allow update: if isValidId(userId) && isValidId(settingKey) &&
+          hasParentUser(userId) &&
+          isValidWorkspaceSetting(incoming(), userId, settingKey) &&
+          incoming().key == existing().key &&
+          incoming().ownerId == existing().ownerId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          (
+            isAdmin() ||
+            (
+              isOwner(userId) &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['payload', 'updatedAt'])
+            )
+          );
+        allow delete: if isValidId(userId) && isValidId(settingKey) && isAdmin();
+      }
+    }
+  }
+}

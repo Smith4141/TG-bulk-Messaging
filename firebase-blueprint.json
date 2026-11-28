@@ -1,0 +1,371 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Non-PII workspace profile for an authenticated Firebase user.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Authentication UID."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Display name shown in workspace."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "moderator", "editor", "viewer"],
+          "description": "Workspace RBAC role."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "displayName", "role", "createdAt", "updatedAt"]
+    },
+    "UserPrivateInfo": {
+      "title": "UserPrivateInfo",
+      "description": "Isolated PII record containing user email address.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "minLength": 3,
+          "maxLength": 254
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "email", "createdAt", "updatedAt"]
+    },
+    "Contact": {
+      "title": "Contact",
+      "description": "CRM contact record with opt-in/opt-out compliance metadata.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "phoneNumber": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "telegramUsername": { "type": "string", "maxLength": 80 },
+        "telegramUid": { "type": "string", "maxLength": 80 },
+        "hasTelegram": { "type": "boolean" },
+        "telegramStatus": { "type": "string", "enum": ["active", "inactive", "unknown"] },
+        "lastSeen": { "type": "string", "maxLength": 100 },
+        "company": { "type": "string", "maxLength": 160 },
+        "email": { "type": "string", "maxLength": 254 },
+        "stage": { "type": "string", "enum": ["lead", "qualified", "contacted", "opportunity", "customer", "churned"] },
+        "tags": { "type": "array" },
+        "group": { "type": "string", "maxLength": 100 },
+        "optInStatus": { "type": "string", "enum": ["explicit_opt_in", "implicit_opt_in", "opted_out", "dnc_suppressed"] },
+        "optInMethod": { "type": "string", "maxLength": 64 },
+        "optInDate": { "type": "string", "maxLength": 40 },
+        "optInSource": { "type": "string", "maxLength": 160 },
+        "optOutTimestamp": { "type": "string", "maxLength": 64 },
+        "optOutReason": { "type": "string", "maxLength": 256 },
+        "googleContactSynced": { "type": "boolean" },
+        "assignedToAgentId": { "type": "string", "maxLength": 128 },
+        "assignedModeratorId": { "type": "string", "maxLength": 128 },
+        "initialSessionId": { "type": "string", "maxLength": 128 },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "isArchived": { "type": "boolean" },
+        "archivedAt": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "name", "phoneNumber", "hasTelegram", "telegramStatus", "stage", "tags", "optInStatus", "optInDate", "optInSource", "googleContactSynced", "assignedToAgentId", "createdAt", "updatedAt"]
+    },
+    "Campaign": {
+      "title": "Campaign",
+      "description": "Bulk messaging campaign state and metrics.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "messageText": { "type": "string", "maxLength": 4096 },
+        "targetSegment": { "type": "string", "maxLength": 128 },
+        "recipientCount": { "type": "integer" },
+        "sentCount": { "type": "integer" },
+        "deliveredCount": { "type": "integer" },
+        "readCount": { "type": "integer" },
+        "clickedCount": { "type": "integer" },
+        "failedCount": { "type": "integer" },
+        "unsubscribedCount": { "type": "integer" },
+        "status": { "type": "string", "enum": ["draft", "scheduled", "running", "completed", "paused", "failed"] },
+        "sendRatePerSecond": { "type": "number" },
+        "tags": { "type": "array" },
+        "sendingEngine": { "type": "string", "enum": ["bot_api", "mtproto"] },
+        "pausedReason": { "type": "string", "maxLength": 500 },
+        "flaggedSessionId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "name", "messageText", "targetSegment", "recipientCount", "sentCount", "deliveredCount", "readCount", "clickedCount", "failedCount", "unsubscribedCount", "status", "sendRatePerSecond", "tags", "createdAt", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Individual live chat message scoped to a contact thread.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "contactId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "sender": { "type": "string", "enum": ["contact", "agent", "bot"] },
+        "senderName": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "text": { "type": "string", "maxLength": 4096 },
+        "timestamp": { "type": "string", "maxLength": 40 },
+        "status": { "type": "string", "enum": ["sent", "delivered", "read"] },
+        "sessionId": { "type": "string", "maxLength": 128 },
+        "sessionLabel": { "type": "string", "maxLength": 160 },
+        "isPinned": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "contactId", "sender", "senderName", "text", "timestamp", "status", "createdAt", "updatedAt"]
+    },
+    "AutoResponseRule": {
+      "title": "AutoResponseRule",
+      "description": "Automated keyword reply rule.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "triggerKeyword": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "matchType": { "type": "string", "enum": ["exact", "contains", "starts_with"] },
+        "replyText": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "isActive": { "type": "boolean" },
+        "priority": { "type": "integer" },
+        "action": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "triggerKeyword", "matchType", "replyText", "isActive", "priority", "createdAt", "updatedAt"]
+    },
+    "WebhookEndpoint": {
+      "title": "WebhookEndpoint",
+      "description": "Configured outbound webhook subscription.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "endpointUrl": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "secretToken": { "type": "string", "maxLength": 256 },
+        "eventSubscriptions": { "type": "array" },
+        "isActive": { "type": "boolean" },
+        "totalCalls": { "type": "integer" },
+        "successRate": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "name", "endpointUrl", "secretToken", "eventSubscriptions", "isActive", "totalCalls", "successRate", "createdAt", "updatedAt"]
+    },
+    "WebhookLog": {
+      "title": "WebhookLog",
+      "description": "Immutable delivery log for webhook dispatches.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "webhookId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "event": { "type": "string", "maxLength": 120 },
+        "payload": { "type": "string", "maxLength": 8000 },
+        "responseStatus": { "type": "integer" },
+        "responseBody": { "type": "string", "maxLength": 2000 },
+        "timestamp": { "type": "string", "maxLength": 40 },
+        "executionTimeMs": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "webhookId", "event", "payload", "responseStatus", "responseBody", "timestamp", "executionTimeMs", "createdAt"]
+    },
+    "UserbotSession": {
+      "title": "UserbotSession",
+      "description": "MTProto Userbot session metadata.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "healthStatus": { "type": "string", "enum": ["active", "flood_wait", "flagged_spambot", "user_deactivated", "auth_key_unregistered", "disconnected"] },
+        "spambotStatus": { "type": "string", "enum": ["clean", "limited", "banned", "unchecked"] },
+        "spambotMessage": { "type": "string", "maxLength": 500 },
+        "dailyLimit": { "type": "integer" },
+        "messagesSentToday": { "type": "integer" },
+        "messagesSentTotal": { "type": "integer" },
+        "isConnected": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "label", "phone", "healthStatus", "spambotStatus", "dailyLimit", "messagesSentToday", "messagesSentTotal", "isConnected", "createdAt", "updatedAt"]
+    },
+    "AudienceList": {
+      "title": "AudienceList",
+      "description": "Saved segment of contact IDs for targeted campaigns.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "description": { "type": "string", "maxLength": 500 },
+        "contactIds": { "type": "array" },
+        "source": { "type": "string", "maxLength": 120 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "name", "contactIds", "source", "createdAt", "updatedAt"]
+    },
+    "CampaignBackupSnapshot": {
+      "title": "CampaignBackupSnapshot",
+      "description": "Failover snapshot capturing pending campaign recipients.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "campaignId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "campaignName": { "type": "string", "maxLength": 200 },
+        "tag": { "type": "string", "maxLength": 250 },
+        "triggeredBySessionId": { "type": "string", "maxLength": 128 },
+        "triggeredBySessionLabel": { "type": "string", "maxLength": 160 },
+        "triggeredReason": { "type": "string", "maxLength": 500 },
+        "pendingCount": { "type": "integer" },
+        "restoredAt": { "type": "string", "maxLength": 64 },
+        "restoredWithSessionId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "campaignId", "campaignName", "tag", "triggeredBySessionId", "triggeredBySessionLabel", "triggeredReason", "pendingCount", "createdAt", "updatedAt"]
+    },
+    "CloudFile": {
+      "title": "CloudFile",
+      "description": "Cloud storage media or document reference.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "size": { "type": "integer" },
+        "type": { "type": "string", "maxLength": 120 },
+        "uploadedAt": { "type": "string", "maxLength": 40 },
+        "url": { "type": "string", "maxLength": 1000 },
+        "encrypted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "name", "size", "type", "uploadedAt", "url", "encrypted", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Append-only security and compliance audit trail entry.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 128 },
+        "userName": { "type": "string", "maxLength": 160 },
+        "action": { "type": "string", "maxLength": 120 },
+        "entity": { "type": "string", "maxLength": 120 },
+        "details": { "type": "string", "maxLength": 1000 },
+        "timestamp": { "type": "string", "maxLength": 40 },
+        "ipAddress": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "userId", "userName", "action", "entity", "details", "timestamp", "ipAddress", "createdAt"]
+    },
+    "WorkspaceSetting": {
+      "title": "WorkspaceSetting",
+      "description": "Scoped integration or routing configuration document.",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string", "enum": ["wordpress", "googleSync", "botConfig", "mtprotoConfig", "moderatorRouting"] },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "payload": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["key", "ownerId", "payload", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Non-PII workspace profile document keyed by Firebase UID."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Isolated PII storage (email) restricted strictly to owner and admin."
+    },
+    "/users/{userId}/contacts/{contactId}": {
+      "schema": { "$ref": "#/entities/Contact" },
+      "description": "User-owned CRM contacts with PII and compliance metadata."
+    },
+    "/users/{userId}/campaigns/{campaignId}": {
+      "schema": { "$ref": "#/entities/Campaign" },
+      "description": "User-owned broadcast campaigns."
+    },
+    "/users/{userId}/chatMessages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Individual live chat messages linked to a contact."
+    },
+    "/users/{userId}/autoResponses/{ruleId}": {
+      "schema": { "$ref": "#/entities/AutoResponseRule" },
+      "description": "Keyword auto-response rules."
+    },
+    "/users/{userId}/webhooks/{webhookId}": {
+      "schema": { "$ref": "#/entities/WebhookEndpoint" },
+      "description": "Outbound webhook endpoint definitions."
+    },
+    "/users/{userId}/webhookLogs/{logId}": {
+      "schema": { "$ref": "#/entities/WebhookLog" },
+      "description": "Immutable webhook execution logs."
+    },
+    "/users/{userId}/userbotSessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/UserbotSession" },
+      "description": "Userbot session health and quota metadata."
+    },
+    "/users/{userId}/audienceLists/{listId}": {
+      "schema": { "$ref": "#/entities/AudienceList" },
+      "description": "Saved contact audience segments."
+    },
+    "/users/{userId}/campaignBackups/{backupId}": {
+      "schema": { "$ref": "#/entities/CampaignBackupSnapshot" },
+      "description": "Campaign failover backup snapshots."
+    },
+    "/users/{userId}/cloudFiles/{fileId}": {
+      "schema": { "$ref": "#/entities/CloudFile" },
+      "description": "Cloud file attachment metadata."
+    },
+    "/users/{userId}/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Append-only workspace audit logs."
+    },
+    "/users/{userId}/settings/{settingKey}": {
+      "schema": { "$ref": "#/entities/WorkspaceSetting" },
+      "description": "Workspace integration configurations."
+    }
+  }
+}

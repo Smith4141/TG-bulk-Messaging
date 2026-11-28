@@ -1,0 +1,58 @@
+{
+  "userbots": [
+    {
+      "id": "ub_primary",
+      "label": "Primary Telegram Line (+8801742302202)",
+      "phone": "+8801742302202",
+      "apiId": "33388993",
+      "apiHash": "175d4d1478204d2f4c28721de777e59f",
+      "sessionString": "",
+      "proxy": {
+        "enabled": false,
+        "type": "socks5",
+        "host": "",
+        "port": 1080
+      },
+      "healthStatus": "active",
+      "spambotStatus": "unchecked",
+      "spambotMessage": "API ID, API Hash & Phone configured — click Request Telegram OTP to authenticate live sending.",
+      "lastSpambotCheckAt": "2026-11-24T17:16:44.244Z",
+      "dailyLimit": 50,
+      "messagesSentToday": 0,
+      "messagesSentTotal": 0,
+      "isConnected": false,
+      "isLiveTelegramClient": false,
+      "account": {
+        "id": "33388993",
+        "firstName": "Primary Gateway",
+        "lastName": "",
+        "username": "",
+        "phone": "+8801742302202",
+        "dcId": 4,
+        "isPremium": false
+      },
+      "createdAt": "2026-11-24T17:16:44.245Z"
+    }
+  ],
+  "backups": [],
+  "apiPool": [
+    {
+      "id": "api_ub_primary",
+      "label": "Primary Telegram Line (+8801742302202)",
+      "type": "mtproto",
+      "enabled": false,
+      "status": "disabled",
+      "apiId": "33388993",
+      "apiHash": "175d4d1478204d2f4c28721de777e59f",
+      "phone": "+8801742302202",
+      "sessionId": "ub_primary",
+      "sessionString": "",
+      "dailyLimit": 1000,
+      "sentCount": 0,
+      "failedCount": 0,
+      "lastError": "OTP or StringSession verification required.",
+      "createdAt": "2026-11-24T17:16:44.245Z",
+      "lastVerifiedAt": "2026-11-24T17:16:53.738Z"
+    }
+  ]
+}
